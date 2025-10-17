@@ -30,6 +30,9 @@ const double tpi = 6.283185307179586476925286766559;
 #define PHYS 10
 #define MaxNumOfShells 4
 
+#define INDEX(i, j, k, Nx, Ny, Nz) \
+    ((((i) + (Nx)) % (Nx)) + (((j) + (Ny)) % (Ny)) * (Nx) + (((k) + (Nz)) % (Nz)) * (Nx) * (Ny))
+
 
 char configfilename[64] = "S3_config.cfg";
 char InitialBmpFile[64];
@@ -49,6 +52,14 @@ char State2[64];
 #define R2D     57.295779513
 int ColorShift=0;
 char BuferString[400];
+
+struct vec3{
+    double x, y, z;
+};
+
+struct vec4{
+    double x, y, z, w;
+};
 
 
 int ReadHeaderLine(FILE * fp, char * line)
@@ -1420,7 +1431,103 @@ void SaveOvf2(double* Sx, double* Sy, double* Sz, double* Sv,int Nx, int Ny, int
 
 
 
+vec3 Cross(vec3 a, vec3 b){
+    vec3 c;
+    c.x = a.y*b.z - a.z*b.y;
+    c.y = a.z*b.x - a.x*b.z;
+    c.z = a.x*b.y - a.y*b.x;
+    return c;
+}
 
+double Dot(vec3 a, vec3 b){
+    return (a.x*b.x + a.y*b.y + a.z*b.z);
+}
+
+// columns for determinant
+// M = [ n | dx | dy | dz ]
+double det4(vec4 a, vec4 b, vec4 c, vec4 d) {
+    // compute 4x4 determinant via Levi-Civita expansion
+    return
+        a.x * (b.y*(c.z*d.w - c.w*d.z) - b.z*(c.y*d.w - c.w*d.y) + b.w*(c.y*d.z - c.z*d.y))
+      - a.y * (b.x*(c.z*d.w - c.w*d.z) - b.z*(c.x*d.w - c.w*d.x) + b.w*(c.x*d.z - c.z*d.x))
+      + a.z * (b.x*(c.y*d.w - c.w*d.y) - b.y*(c.x*d.w - c.w*d.x) + b.w*(c.x*d.y - c.y*d.x))
+      - a.w * (b.x*(c.y*d.z - c.z*d.y) - b.y*(c.x*d.z - c.z*d.x) + b.z*(c.x*d.y - c.y*d.x));
+}
+
+double TopCharge(double* Sx, double* Sy, double* Sz, double* Sv,int Nx, int Ny, int Nz){
+    double Coef2[] = {1.0/12.0, -2.0/3.0, 0.0, 2.0/3.0, -1.0/12.0};
+    double res = 0.0;
+    for(int i=0; i<Nx; i++){
+        for(int j=0; j<Ny; j++){
+            for(int k=0; k<Nz; k++){
+                int n = i + j*Nx + k*Nx*Ny;
+                vec4 S; S.x = Sx[n]; S.y = Sy[n]; S.z = Sz[n]; S.w = Sv[n];
+                vec4 dx, dy, dz;
+
+                //2nd order scheme for derivatives
+                // int np = (i+1)%Nx + j*Nx + k*Nx*Ny;
+                // int nm = (i-1+Nx)%Nx + j*Nx + k*Nx*Ny;
+                
+                // dx.x = 0.5*(Sx[np]-Sx[nm]);
+                // dx.y = 0.5*(Sy[np]-Sy[nm]);
+                // dx.z = 0.5*(Sz[np]-Sz[nm]);
+                // dx.w = 0.5*(Sv[np]-Sv[nm]);
+
+
+                // np = i + ((j+1)%Ny)*Nx + k*Nx*Ny;
+                // nm = i + ((j-1+Ny)%Ny)*Nx + k*Nx*Ny;
+                // dy.x = 0.5*(Sx[np]-Sx[nm]);
+                // dy.y = 0.5*(Sy[np]-Sy[nm]);
+                // dy.z = 0.5*(Sz[np]-Sz[nm]);
+                // dy.w = 0.5*(Sv[np]-Sv[nm]);
+
+                // np = i + j*Nx + ((k+1)%Nz)*Nx*Ny;
+                // nm = i + j*Nx + ((k-1+Nz)%Nz)*Nx*Ny;
+                // dz.x = 0.5*(Sx[np]-Sx[nm]);
+                // dz.y = 0.5*(Sy[np]-Sy[nm]);
+                // dz.z = 0.5*(Sz[np]-Sz[nm]);
+                // dz.w = 0.5*(Sv[np]-Sv[nm]);
+
+                //4th order scheme
+                int n1 = INDEX(i-2, j, k, Nx, Ny, Nz);
+                int n2 = INDEX(i-1, j, k, Nx, Ny, Nz);
+                int n3 = INDEX(i+1, j, k, Nx, Ny, Nz);
+                int n4 = INDEX(i+2, j, k, Nx, Ny, Nz);
+                dx.x = Coef2[0]*Sx[n1] + Coef2[1]*Sx[n2] + Coef2[3]*Sx[n3] + Coef2[4]*Sx[n4];
+                dx.y = Coef2[0]*Sy[n1] + Coef2[1]*Sy[n2] + Coef2[3]*Sy[n3] + Coef2[4]*Sy[n4];
+                dx.z = Coef2[0]*Sz[n1] + Coef2[1]*Sz[n2] + Coef2[3]*Sz[n3] + Coef2[4]*Sz[n4];
+                dx.w = Coef2[0]*Sv[n1] + Coef2[1]*Sv[n2] + Coef2[3]*Sv[n3] + Coef2[4]*Sv[n4];
+
+                n1 = INDEX(i, j-2, k, Nx, Ny, Nz);
+                n2 = INDEX(i, j-1, k, Nx, Ny, Nz);
+                n3 = INDEX(i, j+1, k, Nx, Ny, Nz);
+                n4 = INDEX(i, j+2, k, Nx, Ny, Nz);
+                dy.x = Coef2[0]*Sx[n1] + Coef2[1]*Sx[n2] + Coef2[3]*Sx[n3] + Coef2[4]*Sx[n4];
+                dy.y = Coef2[0]*Sy[n1] + Coef2[1]*Sy[n2] + Coef2[3]*Sy[n3] + Coef2[4]*Sy[n4];
+                dy.z = Coef2[0]*Sz[n1] + Coef2[1]*Sz[n2] + Coef2[3]*Sz[n3] + Coef2[4]*Sz[n4];
+                dy.w = Coef2[0]*Sv[n1] + Coef2[1]*Sv[n2] + Coef2[3]*Sv[n3] + Coef2[4]*Sv[n4];
+
+                n1 = INDEX(i, j, k-2, Nx, Ny, Nz);
+                n2 = INDEX(i, j, k-1, Nx, Ny, Nz);
+                n3 = INDEX(i, j, k+1, Nx, Ny, Nz);
+                n4 = INDEX(i, j, k+2, Nx, Ny, Nz);
+                dz.x = Coef2[0]*Sx[n1] + Coef2[1]*Sx[n2] + Coef2[3]*Sx[n3] + Coef2[4]*Sx[n4];
+                dz.y = Coef2[0]*Sy[n1] + Coef2[1]*Sy[n2] + Coef2[3]*Sy[n3] + Coef2[4]*Sy[n4];
+                dz.z = Coef2[0]*Sz[n1] + Coef2[1]*Sz[n2] + Coef2[3]*Sz[n3] + Coef2[4]*Sz[n4];
+                dz.w = Coef2[0]*Sv[n1] + Coef2[1]*Sv[n2] + Coef2[3]*Sv[n3] + Coef2[4]*Sv[n4];
+
+
+                res += det4(S, dx, dy, dz) / (2.0 * M_PI * M_PI);
+
+                
+
+            }
+        }
+    }
+
+    return res;
+
+}
 
 
 void WriteData2OVF(double** g, bool** b, int** Dimension){
@@ -1486,6 +1593,7 @@ void WriteData2OVF(double** g, bool** b, int** Dimension){
     SaveOvf2(Sx,Sy,Sz,Sv,Nx,Ny,Nz,out2);    
     free(out2);
 
+    //printf("Top Charge: %f\n", TopCharge(Sx,Sy,Sz,Sv,Nx,Ny,Nz));
     
   
    delete [] Sx; Sx = 0;
