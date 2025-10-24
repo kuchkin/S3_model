@@ -1529,6 +1529,28 @@ double TopCharge(double* Sx, double* Sy, double* Sz, double* Sv,int Nx, int Ny, 
 
 }
 
+void SaveCsv2(double* Sx, double* Sy, double* Sz,double* Sv, int Nx, int Ny, int Nz, char ovf_filename[100]){
+   
+   FILE* outFile = fopen (ovf_filename,"w");
+   // printf("Saving the final configuration ... ");
+    // o.open(csv_filename, ios::out);
+   // snprintf(BuferString,400,"%s,%s,%s,%s,%s,%s\n","i","j","k","Sx","Sy","Sz");
+   // snprintf(BuferString,400,"%s,%s,%s,%s,%s,%s\n","i","j","k","Sx","Sy","Sz");
+   // fputs(BuferString,outFile);
+    for(int k = 0; k<Nz;k++){
+        for(int j = 0; j<Ny; j++){
+            for(int i = 0; i<Nx; i++){
+                int pos = i+j*Nx+k*Nx*Ny; 
+                  snprintf(BuferString,400,"%i,%i,%i,%0.20f,%0.20f,%0.20f,%0.20f\n",i,j,k,Sx[pos],Sy[pos],Sz[pos],Sv[pos]);
+                  fputs(BuferString,outFile);    
+            }
+        }
+    }
+    fclose(outFile);
+    // printf("DONE!  Data are saved to %s \n",csv_filename);
+
+}
+
 
 void WriteData2OVF(double** g, bool** b, int** Dimension){
     int Nx = Dimension[0][0];
@@ -1592,6 +1614,11 @@ void WriteData2OVF(double** g, bool** b, int** Dimension){
     int p2 = asprintf(&out2, "%s.ovf2", FinalOvfFile);  
     SaveOvf2(Sx,Sy,Sz,Sv,Nx,Ny,Nz,out2);    
     free(out2);
+
+    char *out3 = NULL;
+    int p3 = asprintf(&out3, "%s.csv", FinalOvfFile);  
+    SaveCsv2(Sx,Sy,Sz,Sv,Nx,Ny,Nz,out3);    
+    free(out3);
 
     //printf("Top Charge: %f\n", TopCharge(Sx,Sy,Sz,Sv,Nx,Ny,Nz));
     
