@@ -1,4 +1,8 @@
-//g++ script_S3_v1.cpp -std=c++17 -pthread -ffast-math -O3 -o a 
+/*Compile with:
+
+g++ script_S3_v1.cpp -std=c++17 -pthread -ffast-math -O3 -o a 
+
+*/
 
 #include <iostream>
 #include <thread>
@@ -1833,6 +1837,12 @@ void BP_ini(double** g, bool** b,int** Dimension, double** Parameters){
             ///Skyrme spherical in the cone phase
             t = 1.0*M_PI*(1.0-r2);
             if(r2 > 1.0) t = 0.0;
+            // f = atan2(ry, rx) + 0.5*M_PI;
+
+            // nx = cos(f)*sin(t);
+            // ny = sin(f)*sin(t);
+            // nz = rz*sin(t)/r2;
+            // nv = cos(t);
 
             f = atan2(ry, rx) + 0.5*M_PI + tpi*rz;
 
@@ -1841,10 +1851,10 @@ void BP_ini(double** g, bool** b,int** Dimension, double** Parameters){
             nv = rz*sin(t)/r2;
             nz = cos(t);
 
-            //cone phase
+            // //cone phase
             // nx = 0.0; ny = 0.0; nz = 0.8; nv = 0.6;
 
-            double Th = 0.5*M_PI;
+            double Th = 0.5*M_PI*((nz+1)/2)*((nz+1)/2)*((nz+1)/2);
             double mx = nx*cos(Th) - nz*sin(Th);
             double mz = nz*cos(Th) + nx*sin(Th);
             double my = ny;
@@ -1854,6 +1864,16 @@ void BP_ini(double** g, bool** b,int** Dimension, double** Parameters){
             nz = mz;
 
             ///End Skyrme
+
+            //// 1 1 1
+            // nx = 1.1/sqrt(3.0);
+            // ny = 0.9/sqrt(3.0);
+            // nz = 1.0/sqrt(3.0);
+            // nv = 0.1;
+            // nx = 0.1;
+            // ny = 0.2;
+            // nz = 0.0;
+            // nv = 1.0;
 
             ss = (nv>0)? 1.0 : -1.0;
             b[nt][pos] = (nv>0)? true : false;
@@ -2045,7 +2065,17 @@ auto EffectiveFieldGB_4D(double** g, bool** b, double** de, int** Dimension, dou
                 dnx = -he*(hx+2.*kx*px);
                 dny = -he*(hy+2.*ky*py);
                 dnz = -he*(hz+2.*kz*pz);
-                dnv =  he*2.*kappa*pv - he*ku*64.0*pv*(16.0*pv*pv-13.0)/9.0;
+                dnv =  he*2.*kappa*pv;//
+
+                dnx -= he*ku*(-64.0*px/3.0 + 256.0*px*px*px/9.0 + 128.0*px*(py*py + pz*pz)/3.0);
+                dny -= he*ku*(-64.0*py/3.0 + 256.0*py*py*py/9.0 + 128.0*py*(px*px + pz*pz)/3.0);
+                dnz -= he*ku*(-64.0*pz/3.0 + 256.0*pz*pz*pz/9.0 + 128.0*pz*(py*py + px*px)/3.0);
+
+               //  res += res0*he*((h-hx*nx-hy*ny-hz*nz) + (kz-kx*nx2-ky*ny2-kz*nz2) + kappa*nv*nv);
+               // res -= res0*ku*he*(4.0 - 32.0*(nx2 + ny2 + nz2)/3.0 + 64.0*(nx2*nx2 + ny2*ny2 + nz2*nz2)/9.0);
+               // res -= res0*ku*he*64.0*(nx2*ny2 + nx2*nz2 + ny2*nz2)/3.0;
+
+                // - he*ku*64.0*pv*(16.0*pv*pv-13.0)/9.0;
 
                 // double nv4 = (16.0*nv*nv-13.0)*(16.0*nv*nv-13.0)/9.0;
                 // res += res0*he*((h-hx*nx-hy*ny-hz*nz) + (kz-kx*nx*nx-ky*ny*ny-kz*nz*nz) + kappa*nv*nv - ku*nv4);
@@ -2390,8 +2420,10 @@ auto EnergyGB_4D(double** g, bool** b, int** Dimension, double** Parameters, dou
             }
             }
             double nv4 = (16.0*nv*nv-13.0)*(16.0*nv*nv-13.0)/9.0;
-            res += res0*he*((h-hx*nx-hy*ny-hz*nz) + (kz-kx*nx*nx-ky*ny*ny-kz*nz*nz) + kappa*nv*nv - ku*nv4);
-
+            double nx2 = nx*nx, ny2 = ny*ny, nz2 = nz*nz;
+            res += res0*he*((h-hx*nx-hy*ny-hz*nz) + (kz-kx*nx2-ky*ny2-kz*nz2) + kappa*nv*nv);
+            res -= res0*ku*he*(4.0 - 32.0*(nx2 + ny2 + nz2)/3.0 + 64.0*(nx2*nx2 + ny2*ny2 + nz2*nz2)/9.0);
+            res -= res0*ku*he*64.0*(nx2*ny2 + nx2*nz2 + ny2*nz2)/3.0;
             //pairwise spin interactions: Exchange and DMI
             //x-neighbours
             for(int q = 0; q < NumOfShelsX; q++){
@@ -2682,6 +2714,7 @@ void StepestDescent4D(double** g, bool** b, double** de, int** Dimension, double
 
         if(grad < tol){
             k = NumOfIter;
+            printf("Done! %0.3e\n", grad);
         }
       
         MakeOneStepGB_4D(g, b, de, dt, Dimension, false);
