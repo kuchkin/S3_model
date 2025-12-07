@@ -1,6 +1,6 @@
 /*Compile with:
 
-g++ script_S3_v1.cpp -std=c++17 -pthread -ffast-math -O3 -o a 
+g++ script_S3_v3.cpp -std=c++17 -pthread -ffast-math -O3 -o a 
 
 */
 
